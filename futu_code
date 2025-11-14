@@ -1,0 +1,208 @@
+{海指标第5代-102325}
+{上次修改：2025-10-23-1041}
+{=== 动态偏移计算 ===}
+{显示文字位置}
+买入偏移 := (H-L)*0.8;
+卖出偏移 := (H-L)*0.8;
+
+{=== 市场环境判断 ===}
+{使用DMA和MA差值替代ADX判断趋势强度}
+MA_FAST := MA(C, 8);
+MA_SLOW := MA(C, 21);
+TREND_STRENGTH := ABS(MA_FAST - MA_SLOW) / MA_SLOW * 100;
+强趋势 := TREND_STRENGTH > 2.5;
+弱趋势 := TREND_STRENGTH > 1.5 AND TREND_STRENGTH <= 2.5;
+震荡市 := TREND_STRENGTH <= 1.5;
+
+{=== 抄底卖出指标 ===}
+DIFF : EMA(C,12) - EMA(C,26),NODRAW;
+DEA : EMA(DIFF,9), NODRAW;
+MACD : (DIFF - DEA) * 2, NODRAW;
+N1 := BARSLAST(REF(MACD,1) >= 0 AND MACD < 0);
+MM1 := BARSLAST(REF(MACD,1) <= 0 AND MACD > 0);
+CC1 := LLV(C, N1 + 1);
+CC2 := REF(CC1, MM1 + 1);
+CC3 := REF(CC2, MM1 + 1);
+DIFL1 := LLV(DIFF, N1 + 1);
+DIFL2 := REF(DIFL1, MM1 + 1);
+DIFL3 := REF(DIFL2, MM1 + 1);
+CH1 := HHV(C, MM1 + 1);
+CH2 := REF(CH1, N1 + 1);
+CH3 := REF(CH2, N1 + 1);
+DIFH1 := HHV(DIFF, MM1 + 1);
+DIFH2 := REF(DIFH1, N1 + 1);
+DIFH3 := REF(DIFH2, N1 + 1);
+AAA := CC1 < CC2 AND DIFL1 > DIFL2 AND REF(MACD,1) < 0 AND DIFF < 0;
+BBB := CC1 < CC3 AND DIFL1 < DIFL2 AND DIFL1 > DIFL3 AND REF(MACD,1) < 0 AND DIFF < 0;
+CCC := (AAA OR BBB) AND DIFF < 0;
+JJJ := REF(CCC,1) AND ABS(REF(DIFF,1)) >= ABS(DIFF) * 1.01;
+DXDX := REF(JJJ,1) = 0 AND JJJ;
+
+ZJDBL := CH1 > CH2 AND DIFH1 < DIFH2 AND REF(MACD,1) > 0 AND DIFF > 0;
+GXDBL := CH1 > CH3 AND DIFH1 > DIFH2 AND DIFH1 < DIFH3 AND REF(MACD,1) > 0 AND DIFF > 0;
+DBBL := (ZJDBL OR GXDBL) AND DIFF > 0;
+DBJG := REF(DBBL,1) AND REF(DIFF,1) >= DIFF * 1.01;
+DBJGXC := REF(NOT(DBJG),1) AND DBJG;
+
+{=== 修改：MACD底背离确认 + 换手率限制 ===}
+MACD底背离确认 := DXDX AND COUNT(C < REF(C,1), 3) >= 2 AND VOL > REF(VOL, 1);
+{=== 修改：MACD顶背离确认 + 换手率限制 ===}
+MACD顶背离确认 := DBJGXC AND ((COUNT(C > REF(C,1), 3) >= 2) OR (VOL > REF(VOL, 1)));
+{=== 信号显示 ===}
+DRAWTEXT(MACD底背离确认, L-0.21 , '抄底'), COLORFF00FF;
+DRAWTEXT(MACD顶背离确认, H +0.21, '卖出'), COLORGREEN;
+
+{=== 优化：成交量确认 ===}
+VOL_RATIO1 := MA(VOL,8) / MA(VOL, 21);            {相对量能}
+买放量 := VOL_RATIO1 > 1.2 AND VOL > REF(VOL,1);
+卖放量 := VOL_RATIO1 > 1.4 AND VOL < REF(VOL,1);
+
+VOL_CONFIRM_BUY  := 买放量 OR (VOL_RATIO1 < 0.8 AND C >= REF(C,1));   {放量或缩量止跌}
+VOL_CONFIRM_SELL := 卖放量 OR (VOL_RATIO1 < 0.8 AND C < REF(C,1));    {放量派发或缩量滞涨}
+
+{=== RSI + KDJ 共振抄底提示系统（优化版） ===}
+LC := REF(C, 1);
+RMAX := MAX(C - LC, 0);
+RABS := ABS(C - LC);
+RSI14 := SMA(RMAX, 21, 1) / SMA(RABS, 21, 1) * 100;
+
+TGN1 :=8;
+RSI := SMA(MAX(CLOSE - LC, 0), TGN1, 1) / SMA(ABS(CLOSE - LC), TGN1, 1) * 100;
+DRAWTEXT(CROSS(85,RSI) , H+XMA(TR,300)*1.01,'减') ,COLORYELLOW,LINETHICK3;
+DRAWTEXT(CROSS(15,RSI) , L-XMA(TR,300)*0.99,'超卖') ,COLORLIRED,LINETHICK3;
+{=== 成交量分析 ===}
+CDSELL := COUNT(C < O AND VOL > MA(VOL,8), 5) >= 3 AND H >= HHV(H,8)*0.99;
+CDBUY := COUNT(C > O AND VOL > MA(VOL,8), 5) >= 3 AND L <= LLV(L,8)*1.01;
+RSI超卖 := RSI14 < 37;
+RSI超买 := RSI14 > 64;
+
+{=== RSI指标优化 ===}
+RSI6 := EMA(MAX(C - REF(C, 1), 0), 8) / EMA(ABS(C - REF(C, 1)), 8) * 100;
+
+{=== KDJ优化 ===}
+RSV := (C - LLV(L, 14)) / (HHV(H, 14) - LLV(L, 14)) * 100;
+K := EMA(RSV, 3);
+D := EMA(K, 3);
+J := 3 * K - 2 * D;
+
+{=== 动态KDJ阈值 ===}
+KDJ_OVERSOLD := IF(强趋势, 18, IF(弱趋势, 20, 22));
+KDJ_OVERBOUGHT := IF(强趋势, 88, IF(弱趋势, 85, 82));
+
+KDJ金叉 := CROSS(K, D);
+KDJ死叉 := CROSS(D, K);
+J上升 := J > REF(J, 2);
+J超卖 := J < KDJ_OVERSOLD;
+J下降 := J < REF(J,1);
+J超买 := J > KDJ_OVERBOUGHT;
+
+{=== 双确认买点：RSI超卖 + KDJ金叉 ===}
+双确认 := RSI超卖 AND KDJ金叉;
+双确认卖 := RSI超买 AND KDJ死叉;
+
+{=== 优化：多重确认 ===}
+J值超卖区反弹 := J上升 AND J超卖;
+J值超买区回落 := J下降 AND J超买;
+
+{=== 共振入场优化 ===}
+共振入场 := J值超卖区反弹 AND 双确认 AND (VOL_CONFIRM_BUY);
+DRAWTEXT(共振入场 , L - (H-L) * 0.45, '严格结切'), COLOR0099FF;
+共振入场G := J值超卖区反弹 AND 双确认;
+DRAWTEXT(共振入场G , L - (H-L) * 0.45, '结切'), COLOR0099FF;
+共振出场 := J值超买区回落 AND 双确认卖 AND (VOL_CONFIRM_SELL);
+DRAWTEXT(共振出场, H+ (H-L) * 0.65, '严格结跑'), COLOR0099FF;
+共振出场TMP := J值超买区回落 AND 双确认卖 ;
+
+{=== 底/顶分型结构识别优化 ===}
+底分型底结构 := REF(O,1) < O AND REF(O,1) < REF(O,2);
+底分型顶结构 := REF(C,1) < C AND REF(C,1) < REF(C,2);
+底分型结构 := 底分型底结构 AND 底分型顶结构 AND L < REF(L,1) AND L < REF(L,2);
+底共振确认 := 底分型结构 AND RSI超卖 AND KDJ金叉;
+顶分型顶结构 := REF(O,1) > O AND REF(O,1) > REF(O,2);
+顶分型底结构 := REF(C,1) > C AND REF(C,1) > REF(C,2);
+顶分型结构 := 顶分型底结构 AND 顶分型顶结构 AND H > REF(H,1) AND H > REF(H,2);
+顶共振确认 := 顶分型结构 AND RSI超买 AND KDJ死叉;
+
+{=== RSI动能乖离优化 ===}
+RSI乖离 := RSI6 - RSI14;
+RSI乖离阈值上 := IF(强趋势, 12, IF(弱趋势, 10, 8));
+RSI乖离阈值下 := IF(强趋势, -22, IF(弱趋势, -20, -18));
+RSI乖离减 := RSI乖离 > RSI乖离阈值上 AND RSI6 > 90;
+RSI乖离加 := RSI乖离 < RSI乖离阈值下 AND RSI6 < 15;
+
+{=== 趋势信号层优化：快线EMA21与慢线EMA126交叉 + 价格确认 ===}
+EMA21H := MA(H, 8);
+EMA21L := MA(L, 8);
+EMA126H := MA(H, 21);
+EMA126L := MA(L, 21);
+趋势变多 := CROSS(EMA21H, EMA126H) AND C > EMA21H AND C > EMA126H;
+趋势变空 := CROSS(EMA126L, EMA21L) AND C < EMA21L AND C < EMA126L;
+DRAWTEXT(趋势变多, L - L*0.02, '↑'), COLORRED;
+DRAWTEXT(趋势变空, H+H*0.02, '↓'), COLORGREEN;
+
+{=== 共振信号增强模块：底部 + 顶部评分机制优化 ===}
+{=== 买入信号权重优化 ===}
+DXDX权重 := IF(强趋势, 3, IF(弱趋势, 2, 1));
+CDBUY权重 := IF(强趋势, 4, IF(弱趋势, 3, 2));
+双确认权重 := IF(强趋势, 2, IF(弱趋势, 1, 1));
+共振入场权重 := IF(强趋势, 5, IF(弱趋势, 4, 3));
+共振入场TMP权重 := IF(强趋势, 3, IF(弱趋势, 2, 1));
+底分型结构权重 := IF(强趋势, 3, IF(弱趋势, 2, 1));
+RSI乖离加权重 := IF(强趋势, 2, IF(弱趋势, 1, 1));
+
+{=== 卖出信号权重优化 ===}
+DBJGXC权重 := IF(强趋势, 3, IF(弱趋势, 2, 1));
+CDSELL权重 := IF(强趋势, 4, IF(弱趋势, 3, 2));
+共振出场权重 := IF(强趋势, 5, IF(弱趋势, 4, 3));
+共振出场TMP权重 := IF(强趋势, 2, IF(弱趋势, 1, 1));
+顶分型结构权重 := IF(强趋势, 3, IF(弱趋势, 2, 1));
+双确认卖权重 := IF(强趋势, 2, IF(弱趋势, 1, 1));
+RSI乖离减权重 := IF(强趋势, 2, IF(弱趋势, 1, 1));
+
+底部信号总数 := IF(MACD底背离确认, DXDX权重, 0) +  IF(CDBUY, CDBUY权重, 0) +   IF(双确认, 双确认权重, 0)+  IF(共振入场, 共振入场权重, 0) +  IF(共振入场G, 共振入场TMP权重, 0)+ IF(底分型结构, 底分型结构权重, 0) +  IF(RSI乖离加, RSI乖离加权重, 0) ;
+
+顶部信号总数 := IF(MACD顶背离确认, DBJGXC权重, 0) + IF(CDSELL, CDSELL权重, 0)+  IF(共振出场, 共振出场权重, 0) +  IF(共振出场TMP, 共振出场TMP权重, 0)  +  IF(顶分型结构, 顶分型结构权重, 0) +  IF(双确认卖, 双确认卖权重, 0) +  IF(RSI乖离减, RSI乖离减权重, 0);
+
+{=== 动态评分阈值 ===}
+买入基准分 := IF(强趋势, 2, IF(弱趋势, 3, 4));
+卖出基准分 := IF(强趋势, 4, IF(弱趋势, 3, 2));
+
+二抄 := 底部信号总数 >= 买入基准分 AND 底部信号总数 < 买入基准分 + 2;
+三抄 := 底部信号总数 >= 买入基准分 + 2 AND 底部信号总数 < 买入基准分 + 4;
+四抄 := 底部信号总数 >= 买入基准分 + 4 AND 底部信号总数 < 买入基准分 + 6;
+五抄 := 底部信号总数 >= 买入基准分 + 6 AND 底部信号总数 < 买入基准分 + 8;
+六抄 := 底部信号总数 >= 买入基准分 + 8 AND 底部信号总数 < 买入基准分 + 10;
+七抄 := 底部信号总数 >= 买入基准分 + 10 AND 底部信号总数 < 买入基准分 + 12;
+八抄 := 底部信号总数 >= 买入基准分 + 12 AND 底部信号总数 < 买入基准分 + 14;
+九抄 := 底部信号总数 >= 买入基准分 + 14 AND 底部信号总数 < 买入基准分 + 16;
+十抄 := 底部信号总数 >= 买入基准分 + 16;
+
+二卖 := 顶部信号总数 >= 卖出基准分 AND 顶部信号总数 < 卖出基准分 + 2;
+三卖 := 顶部信号总数 >= 卖出基准分 + 2 AND 顶部信号总数 < 卖出基准分 + 4;
+四卖 := 顶部信号总数 >= 卖出基准分 + 4 AND 顶部信号总数 < 卖出基准分 + 6;
+五卖 := 顶部信号总数 >= 卖出基准分 + 6 AND 顶部信号总数 < 卖出基准分 + 8;
+六卖 := 顶部信号总数 >= 卖出基准分 + 8 AND 顶部信号总数 < 卖出基准分 + 10;
+七卖 := 顶部信号总数 >= 卖出基准分 + 10 AND 顶部信号总数 < 卖出基准分 + 12;
+八卖 := 顶部信号总数 >= 卖出基准分 + 12 AND 顶部信号总数 < 卖出基准分 + 14;
+九卖 := 顶部信号总数 >= 卖出基准分 + 14 AND 顶部信号总数 < 卖出基准分 + 16;
+十卖 := 顶部信号总数 >= 卖出基准分 + 16;
+
+DRAWTEXT(二抄, L - 0.15* 买入偏移, '二'), COLORRED;
+DRAWTEXT(三抄, L - 0.15* 买入偏移, '三'), COLORRED;
+DRAWTEXT(四抄, L - 0.15*买入偏移, '四'), COLORRED;
+DRAWTEXT(五抄, L-0.15*买入偏移, '五'), COLORRED;
+DRAWTEXT(六抄, L - 0.15*买入偏移, '六'), COLORRED;
+DRAWTEXT(七抄, L -0.15*买入偏移, '七'),COLORRED;
+DRAWTEXT(八抄, L -0.15*买入偏移, '八'), COLORRED;
+DRAWTEXT(九抄, L -0.15*买入偏移, '九'),COLORRED;
+DRAWTEXT(十抄, L - 0.15*买入偏移, '十'), COLORRED;
+
+DRAWTEXT(二卖, H+0.31*卖出偏移, '二'),COLOR00DDDD;
+DRAWTEXT(三卖, H+0.31*卖出偏移, '三'),COLOR00DDDD;
+DRAWTEXT(四卖, H+0.31*卖出偏移, '四'), COLOR00DDDD;
+DRAWTEXT(五卖, H+0.31*卖出偏移, '五'), COLOR00DDDD;
+DRAWTEXT(六卖, H+0.31*卖出偏移, '六'), COLOR00DDDD;
+DRAWTEXT(七卖, H+0.31*卖出偏移, '七'), COLOR00DDDD;
+DRAWTEXT(八卖, H+0.31*卖出偏移, '八'), COLOR00DDDD;
+DRAWTEXT(九卖, H+0.31*卖出偏移, '九'), COLOR00DDDD;
+DRAWTEXT(十卖, H+0.31*卖出偏移, '十'), COLOR00DDDD;
